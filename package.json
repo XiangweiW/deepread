@@ -1,7 +1,7 @@
 {
-  "name": "zotero-copilot",
-  "version": "0.0.1",
-  "description": "AI reading assistant plugin for Zotero 7",
+  "name": "deepread",
+  "version": "0.0.2",
+  "description": "DeepRead — AI reading assistant for Zotero. Chat with your papers and collections.",
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",

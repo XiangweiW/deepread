@@ -6,6 +6,22 @@ All LLM calls go through your own API key. Choose Anthropic Claude or Google Gem
 
 > Status: working MVP. Tested on Zotero 9.x / macOS. Linux / Windows untested.
 
+[![CI](https://github.com/XiangweiW/deepread/actions/workflows/ci.yml/badge.svg)](https://github.com/XiangweiW/deepread/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/XiangweiW/deepread)](https://github.com/XiangweiW/deepread/releases)
+
+## Screenshots
+
+| Sidebar chat | Collection RAG overlay | Settings pane |
+|---|---|---|
+| ![Sidebar](docs/screenshots/sidebar.png) | ![Collection](docs/screenshots/collection.png) | ![Prefs](docs/screenshots/prefs.png) |
+
+> Screenshots placeholder — capture pending. See [docs/screenshots/README.md](docs/screenshots/README.md) for capture instructions.
+
+## Install
+
+Grab the latest `.xpi` from [Releases](https://github.com/XiangweiW/deepread/releases). In Zotero: **Tools → Plugins → ⚙️ → Install Plugin From File** and pick the downloaded file.
+
+For development install (watch mode + rebuild), see [Install (development)](#install-development) below.
+
 ## Features
 
 - **Single-paper chat** — sidebar in the PDF reader with streaming responses, prompt templates (summarize / translate to Chinese), free chat, and "save to note" to persist the transcript as a Zotero child note.
