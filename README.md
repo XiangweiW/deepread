@@ -1,4 +1,8 @@
-# DeepRead
+<p align="center">
+  <img src="content/icons/icon-256.png" width="160" alt="DeepRead logo" />
+</p>
+
+<h1 align="center">DeepRead</h1>
 
 DeepRead is a Zotero 7+ plugin that turns your library into a conversational research assistant. It adds an AI sidebar to the PDF reader, supports right-click "Ask DeepRead" on selected text, and provides collection-level retrieval-augmented chat over multiple papers.
 
