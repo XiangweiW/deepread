@@ -12,6 +12,7 @@ import {
 import { registerSelectionPopup } from './integrations/contextmenu';
 import { registerPrefsPane } from './integrations/prefspanel';
 import { registerCollectionMenu } from './integrations/collectionmenu';
+import { registerItemMenu } from './integrations/itemmenu';
 import {
   bootstrapCollectionChatWindow,
   unmountAllCollectionChats,
@@ -21,6 +22,7 @@ import { registerMcpHost, unregisterMcpHost } from './mcp-host';
 
 let unregisterSelection: (() => void) | null = null;
 let unregisterCollection: (() => void) | null = null;
+let unregisterItem: (() => void) | null = null;
 
 function debug(msg: string, level: number = 3): void {
   try {
@@ -145,6 +147,12 @@ export async function onStartup(args: { id: string; version: string; rootURI: st
     }
 
     try {
+      unregisterItem = registerItemMenu();
+    } catch (e) {
+      debug('registerItemMenu failed: ' + e, 1);
+    }
+
+    try {
       registerMcpHost();
     } catch (e) {
       debug('mcp host failed: ' + e, 1);
@@ -160,6 +168,7 @@ export function onShutdown(): void {
   try {
     if (unregisterSelection) { try { unregisterSelection(); } catch {} unregisterSelection = null; }
     if (unregisterCollection) { try { unregisterCollection(); } catch {} unregisterCollection = null; }
+    if (unregisterItem) { try { unregisterItem(); } catch {} unregisterItem = null; }
     try { unmountAllCollectionChats(); } catch (e) { debug('unmountAllCollectionChats failed: ' + e, 1); }
     try { unregisterMcpHost(); } catch {}
     unregisterReaderIntegration();

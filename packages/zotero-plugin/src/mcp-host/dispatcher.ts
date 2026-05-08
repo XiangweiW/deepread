@@ -66,13 +66,41 @@ function isNotification(req: JsonRpcRequest): boolean {
   return req.id === undefined;
 }
 
-function normalizeToolResult(raw: unknown): ToolResult {
-  if (isPlainObject(raw) && Array.isArray((raw as ToolResult).content)) {
-    return raw as ToolResult;
+type SpecContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'image'; data: string; mimeType: string };
+
+function safeStringify(v: unknown): string {
+  try { return JSON.stringify(v, null, 2); }
+  catch { try { return String(v); } catch { return ''; } }
+}
+
+function sanitizeBlock(b: unknown): SpecContentBlock {
+  if (isPlainObject(b)) {
+    const t = b.type;
+    if (t === 'text' && typeof b.text === 'string') {
+      return { type: 'text', text: b.text };
+    }
+    if (t === 'image' && typeof b.data === 'string' && typeof b.mimeType === 'string') {
+      return { type: 'image', data: b.data, mimeType: b.mimeType };
+    }
+    if (t === 'json') {
+      return { type: 'text', text: safeStringify((b as any).json) };
+    }
+    // unknown shape: stringify the whole block
+    return { type: 'text', text: safeStringify(b) };
   }
-  return {
-    content: [{ type: 'json', json: raw }],
-  };
+  return { type: 'text', text: safeStringify(b) };
+}
+
+function normalizeToolResult(raw: unknown): { content: SpecContentBlock[]; isError?: boolean } {
+  if (isPlainObject(raw) && Array.isArray((raw as ToolResult).content)) {
+    const blocks = ((raw as ToolResult).content as unknown[]).map(sanitizeBlock);
+    const out: { content: SpecContentBlock[]; isError?: boolean } = { content: blocks };
+    if ((raw as ToolResult).isError === true) out.isError = true;
+    return out;
+  }
+  return { content: [{ type: 'text', text: safeStringify(raw) }] };
 }
 
 export async function dispatch(
