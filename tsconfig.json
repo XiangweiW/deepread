@@ -1,18 +1,8 @@
 {
-  "compilerOptions": {
-    "target": "ES2020",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "jsx": "react-jsx",
-    "strict": true,
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-    "resolveJsonModule": true,
-    "skipLibCheck": true,
-    "lib": ["DOM", "DOM.Iterable", "ES2020"],
-    "baseUrl": "./src",
-    "outDir": "./build",
-    "noEmit": true
-  },
-  "include": ["src/**/*"]
+  "files": [],
+  "references": [
+    { "path": "./packages/shared" },
+    { "path": "./packages/zotero-plugin" },
+    { "path": "./packages/mcp-server" }
+  ]
 }

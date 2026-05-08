@@ -1,0 +1,15 @@
+{
+  "name": "@deepread/zotero-plugin",
+  "version": "0.0.2",
+  "description": "DeepRead Zotero 7 plugin (bootstrapped extension).",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@deepread/shared": "*",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0"
+  }
+}

@@ -11,24 +11,42 @@ This document describes how to set up a local development environment for Zotero
 
 ## Repository layout
 
+DeepRead is an npm-workspaces monorepo:
+
+```
+deepread/                 (monorepo, npm workspaces)
+  packages/
+    shared/        @deepread/shared — pure TS: chunker, embedder, retriever, llm, prompts
+    zotero-plugin/ @deepread/zotero-plugin — the Zotero side, owns Zotero APIs and bundles into .xpi
+    mcp-server/    deepread-mcp — public npm package, stdio↔HTTP bridge for MCP clients
+  scripts/         build, package, dev — orchestrate across packages
+```
+
+Inside `packages/zotero-plugin/`:
+
 - `src/` — TypeScript source bundled by esbuild into `build/index.js`.
 - `bootstrap.js` — Zotero 7 bootstrapped extension entry; loads `build/index.js`.
 - `manifest.json` — plugin manifest consumed by Zotero.
 - `prefs.js` — default preference values registered with Zotero.
 - `locale/` — Fluent localization files.
 - `content/` — non-code assets shipped with the XPI (icons, future XHTML).
-- `scripts/` — build (`build.mjs`) and packaging (`package.mjs`) scripts.
-- `docs/` — developer and user documentation.
 - `build/` — generated; the runtime layout Zotero loads.
-- `dist/` — generated; produced `.xpi` files.
+
+Top-level generated dirs:
+
+- `dist/` — produced `.xpi` files.
+- `packages/mcp-server/dist/` — built bridge (`index.js`) consumed by `npx deepread-mcp`.
 
 ## First-run setup
 
 ```
 cp .env.example .env       # then edit .env with your Anthropic key
-npm install
-npm run build
+npm install                # uses npm workspaces; installs all packages in one shot
+npm run build              # builds the Zotero plugin → packages/zotero-plugin/build/index.js
+cd packages/mcp-server && npm run build && cd ../..   # builds the MCP bridge → packages/mcp-server/dist/index.js
 ```
+
+`npm run build` from the repo root delegates to the Zotero plugin and produces both `packages/zotero-plugin/build/index.js` and `dist/zotero-copilot-<version>.xpi` (via `npm run package`). The MCP bridge has its own build step today; it will be folded into the root `build` later.
 
 `.env` is for local helper scripts only. The plugin itself reads its API key from the Zotero preference `extensions.zotero-copilot.apiKey`; bundled code never reads `.env`.
 
@@ -41,10 +59,10 @@ Zotero 7 supports loading a plugin directly from a local directory by writing a 
    - Linux: `~/.zotero/zotero/<random>.default/`
    - Windows: `%APPDATA%\Zotero\Zotero\Profiles\<random>.default\`
 2. Inside that profile, open the `extensions/` subdirectory (create it if missing).
-3. Create a plain text file named exactly `zotero-copilot@xiangweiw.dev` (no extension). Its contents must be the absolute path to the `build/` directory of this repository, e.g.:
+3. Create a plain text file named exactly `zotero-copilot@xiangweiw.dev` (no extension). Its contents must be the absolute path to the plugin's `build/` directory, e.g.:
 
    ```
-   /Users/you/projects/zotero-copilot/build
+   /Users/you/projects/zotero-copilot/packages/zotero-plugin/build
    ```
 
 4. If Zotero refuses to load unsigned development plugins, set `extensions.experimental.enabled` to `true` in `Edit > Settings > Advanced > Config Editor`, then restart Zotero.
@@ -91,4 +109,30 @@ This invokes esbuild in watch mode and keeps `build/index.js` up to date as you 
 npm run typecheck
 ```
 
-esbuild does not type-check. Run `tsc --noEmit` (wrapped by the script above) before committing.
+This runs `npm --workspaces --if-present run typecheck` and so covers every package that exposes a `typecheck` script. esbuild does not type-check; run this before committing.
+
+## MCP development
+
+The MCP bridge (`packages/mcp-server/`) talks to a running Zotero plugin over loopback HTTP. To iterate:
+
+1. Start Zotero with the dev-linked plugin and turn on **Settings → DeepRead → Enable MCP server**.
+2. Build the bridge:
+
+   ```
+   npm --workspace=deepread-mcp run build
+   ```
+
+3. Smoke-test it from a shell — feed it a JSON-RPC frame on stdin and inspect the reply on stdout:
+
+   ```
+   echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
+     | node packages/mcp-server/dist/index.js
+   ```
+
+   You should see a JSON response listing the DeepRead tools (`search_library`, `get_item`, …). If the response is an error mentioning "plugin is not reachable", the Zotero side isn't listening — re-check step 1.
+
+4. To debug end-to-end inside a real client, point Claude Code / Cursor at your local build instead of the published npm package:
+
+   ```
+   claude mcp add --scope user deepread-dev -- node /absolute/path/packages/mcp-server/dist/index.js
+   ```

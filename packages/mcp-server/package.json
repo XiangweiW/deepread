@@ -1,0 +1,40 @@
+{
+  "name": "deepread-mcp",
+  "version": "0.0.2",
+  "description": "MCP server bridge for DeepRead Zotero plugin. Lets Claude Code / Cursor / Codex CLI / etc. read your Zotero library.",
+  "type": "module",
+  "bin": {
+    "deepread-mcp": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "esbuild": "^0.24.0",
+    "@types/node": "^22.0.0"
+  },
+  "keywords": [
+    "mcp",
+    "zotero",
+    "deepread",
+    "model-context-protocol",
+    "academic",
+    "research"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/XiangweiW/deepread.git",
+    "directory": "packages/mcp-server"
+  }
+}

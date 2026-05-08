@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT = path.resolve(__dirname, '..');
+const PLUGIN_DIR = path.join(ROOT, 'packages/zotero-plugin');
+const BUILD_DIR = path.join(PLUGIN_DIR, 'build');
 
 const STATIC_FILES = ['bootstrap.js', 'manifest.json', 'prefs.js'];
 const STATIC_DIRS = ['locale', 'content'];
@@ -17,20 +19,19 @@ function formatSize(bytes) {
 }
 
 function copyStatics() {
-  const buildDir = path.join(ROOT, 'build');
-  fs.mkdirSync(buildDir, { recursive: true });
+  fs.mkdirSync(BUILD_DIR, { recursive: true });
 
   for (const f of STATIC_FILES) {
-    const src = path.join(ROOT, f);
-    const dst = path.join(buildDir, f);
+    const src = path.join(PLUGIN_DIR, f);
+    const dst = path.join(BUILD_DIR, f);
     if (fs.existsSync(src)) {
       fs.copyFileSync(src, dst);
     }
   }
 
   for (const d of STATIC_DIRS) {
-    const src = path.join(ROOT, d);
-    const dst = path.join(buildDir, d);
+    const src = path.join(PLUGIN_DIR, d);
+    const dst = path.join(BUILD_DIR, d);
     if (fs.existsSync(src)) {
       fs.cpSync(src, dst, { recursive: true });
     }
@@ -38,9 +39,10 @@ function copyStatics() {
 }
 
 function makeEsbuildOptions({ prod }) {
+  const SHARED_SRC = path.join(ROOT, 'packages/shared/src');
   return {
-    entryPoints: [path.join(ROOT, 'src/index.ts')],
-    outfile: path.join(ROOT, 'build/index.js'),
+    entryPoints: [path.join(PLUGIN_DIR, 'src/index.ts')],
+    outfile: path.join(BUILD_DIR, 'index.js'),
     bundle: true,
     platform: 'browser',
     format: 'iife',
@@ -52,6 +54,9 @@ function makeEsbuildOptions({ prod }) {
     external: [],
     minify: !!prod,
     logLevel: 'info',
+    alias: {
+      '@deepread/shared': path.join(SHARED_SRC, 'index.ts'),
+    },
   };
 }
 
@@ -74,7 +79,7 @@ export async function build(opts = {}) {
 }
 
 function reportBuilt() {
-  const outFile = path.join(ROOT, 'build/index.js');
+  const outFile = path.join(BUILD_DIR, 'index.js');
   let sizeStr = 'unknown size';
   try {
     const stat = fs.statSync(outFile);
@@ -82,7 +87,8 @@ function reportBuilt() {
   } catch {
     // ignore
   }
-  process.stdout.write(`✓ built build/index.js (${sizeStr})\n`);
+  const rel = path.relative(ROOT, outFile);
+  process.stdout.write(`✓ built ${rel} (${sizeStr})\n`);
   process.stdout.write('✓ copied bootstrap.js, manifest.json, prefs.js, locale/, content/\n');
 }
 

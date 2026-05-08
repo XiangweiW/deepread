@@ -24,10 +24,19 @@ All LLM calls go through your own API key. Choose Anthropic Claude or Google Gem
 
 Grab the latest `.xpi` from [Releases](https://github.com/XiangweiW/deepread/releases). In Zotero: **Tools → Plugins → ⚙️ → Install Plugin From File** and pick the downloaded file.
 
+### Use with Claude Code / Cursor / Codex CLI
+
+DeepRead exposes an MCP server you can plug into any agentic IDE. Quick start:
+1. Install the Zotero plugin (above) and turn on **Settings → DeepRead → Enable MCP server**.
+2. In your IDE: `claude mcp add --scope user deepread -- npx -y deepread-mcp` (or use the one-click "Add to Cursor" button in the plugin's settings).
+
+See [docs/MCP.md](docs/MCP.md) for full setup, the list of tools, and troubleshooting.
+
 For development install (watch mode + rebuild), see [Install (development)](#install-development) below.
 
 ## Features
 
+- **Works with Claude Code, Cursor, Codex CLI** — DeepRead ships an MCP server. Connect it to your favorite agentic IDE and read your Zotero library without an API key. See [docs/MCP.md](docs/MCP.md).
 - **Single-paper chat** — sidebar in the PDF reader with streaming responses, prompt templates (summarize / translate to Chinese), free chat, and "save to note" to persist the transcript as a Zotero child note.
 - **Right-click selected text → Ask DeepRead** — the PDF text-selection popup gets an extra button that explains the selection in the active sidebar.
 - **Collection-level RAG** — right-click any collection and pick "Analyze with DeepRead". The plugin extracts, chunks, and embeds every paper, then opens a draggable / resizable floating chat where queries are answered with retrieval over the whole collection. Embeddings cached on disk; rebuilds are incremental.
@@ -44,6 +53,7 @@ For development install (watch mode + rebuild), see [Install (development)](#ins
 - RAG (`src/rag/`) — paragraph-aware chunker (≈500 tokens / 100 overlap), Gemini `gemini-embedding-001` for embeddings, JSON-on-disk index per collection, cosine top-k retrieval.
 - Reader integration polls `Zotero.Reader._readers` and injects a sidebar via direct DOM manipulation in the reader iframe.
 - Collection chat is rendered as a draggable HTML overlay in the main window (no new browser window — avoids chrome / process-isolation issues on modern Firefox / Zotero).
+  - MCP host (`packages/zotero-plugin/src/mcp-host/`) registers a JSON-RPC endpoint via `Zotero.Server.Endpoints` at `http://127.0.0.1:23119/deepread/mcp`. The `deepread-mcp` npm package is a tiny stdio↔HTTP bridge MCP clients spawn via `npx`.
 
 See [PROJECT_BRIEF.md](PROJECT_BRIEF.md) for the full design rationale and module map.
 
@@ -105,6 +115,8 @@ API keys are stored locally in Zotero preferences (`extensions.zotero-copilot.*`
 ## Acknowledgements
 
 Built with Claude Code as a pair-programmer, scaffolded with prompts inspired by [windingwind/zotero-plugin-template](https://github.com/windingwind/zotero-plugin-template).
+
+Monorepo: `packages/{shared, zotero-plugin, mcp-server}`.
 
 ## License
 

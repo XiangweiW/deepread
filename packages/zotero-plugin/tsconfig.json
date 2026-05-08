@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": "./src",
+    "paths": {
+      "@deepread/shared": ["../../shared/src/index.ts"],
+      "@deepread/shared/*": ["../../shared/src/*"]
+    }
+  },
+  "include": ["src/**/*"]
+}

@@ -7,11 +7,12 @@ import { build } from './build.mjs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT = path.resolve(__dirname, '..');
+const PLUGIN_DIR = path.join(ROOT, 'packages/zotero-plugin');
 
 function readVersion() {
-  const pkgRaw = fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8');
+  const pkgRaw = fs.readFileSync(path.join(PLUGIN_DIR, 'package.json'), 'utf8');
   const pkg = JSON.parse(pkgRaw);
-  if (!pkg.version) throw new Error('package.json has no "version" field');
+  if (!pkg.version) throw new Error('packages/zotero-plugin/package.json has no "version" field');
   return pkg.version;
 }
 
@@ -33,7 +34,7 @@ async function main() {
   await build({ prod: true, watch: false });
 
   const version = readVersion();
-  const buildDir = path.join(ROOT, 'build');
+  const buildDir = path.join(PLUGIN_DIR, 'build');
   const distDir = path.join(ROOT, 'dist');
   fs.mkdirSync(distDir, { recursive: true });
 

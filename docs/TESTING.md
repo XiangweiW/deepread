@@ -67,9 +67,47 @@ Expected: a clear, in-UI error banner explaining the auth failure. The plugin mu
 
 Expected: no React unmount warnings, no leaked event listeners or timers logged. Re-opening a PDF mounts a fresh sidebar without errors.
 
+## T9–T12 — MCP smoke tests
+
+These cover the MCP server (`packages/mcp-server/`) and the in-plugin MCP host. Run after any change to either side.
+
+### T9 — Plugin endpoint responds to `initialize`
+
+1. In Zotero: **Settings → DeepRead → Enable MCP server** = on.
+2. Restart Zotero.
+3. From a shell:
+
+   ```
+   curl -s -X POST http://127.0.0.1:23119/deepread/mcp \
+     -H 'content-type: application/json' \
+     -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}'
+   ```
+
+Expected: HTTP 200 with a JSON body whose `result.serverInfo.name` is `"deepread"`. No errors in the Zotero debug log.
+
+### T10 — Claude Code can list collections
+
+1. `claude mcp add --scope user deepread -- npx -y deepread-mcp` (one-time).
+2. Start a Claude Code session and ask: *"List my Zotero collections."*
+
+Expected: Claude calls the `list_collections` tool, the response shows your real collection names, and there are no permission errors. The Zotero debug log should contain `[deepread/mcp] tools/call list_collections`.
+
+### T11 — Cursor deeplink registers the server
+
+1. In Zotero, open **Settings → DeepRead** and click **Add to Cursor**.
+2. When Cursor opens, accept the prompt to add the `deepread` server.
+3. In Cursor: **Settings → MCP**.
+
+Expected: `deepread` appears in the list with status "connected" (or similar; the exact label depends on Cursor's version). A test prompt like "what tools do you have?" should mention DeepRead's tools.
+
+### T12 — Disabling the MCP server returns a friendly error
+
+1. In Zotero: **Settings → DeepRead → Enable MCP server** = off.
+2. From any registered client, trigger a tool call (e.g. ask Claude Code to "list my collections").
+
+Expected: the bridge surfaces a clear, user-readable error such as *"DeepRead Zotero plugin is not reachable. Open Zotero and enable the MCP server in Settings → DeepRead."* Neither the IDE nor Zotero crashes; re-enabling the toggle and retrying succeeds without restarting either side (worst case: restart the IDE only).
+
 ## Known limitations
 
-- Collection-level analysis is not implemented yet.
 - Citation jumpback (clicking a citation to navigate to a PDF page) is not implemented.
-- There is no native preferences panel; all settings are edited via the Config Editor.
-- Only the Anthropic provider is supported. Local-model support is on the roadmap.
+- MCP tools are read-only; annotation write-back is on the roadmap.
