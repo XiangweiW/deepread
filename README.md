@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="content/icons/icon-256.png" width="160" alt="DeepRead logo" />
+  <img src="packages/zotero-plugin/content/icons/icon-256.png" width="160" alt="DeepRead logo" />
 </p>
 
 <h1 align="center">DeepRead</h1>
