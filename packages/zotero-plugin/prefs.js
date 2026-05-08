@@ -10,3 +10,4 @@ pref("extensions.zotero-copilot.temperature", 0.3);
 pref("extensions.zotero-copilot.sidebarCollapsed", false);
 pref("extensions.zotero-copilot.mcpEnabled", false);
 pref("extensions.zotero-copilot.mcpPort", 23119);
+pref("extensions.zotero-copilot.mcpAllowWrite", false);

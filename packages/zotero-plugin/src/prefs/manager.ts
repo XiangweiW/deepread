@@ -15,6 +15,7 @@ export const PREF_KEYS = {
   sidebarCollapsed: 'sidebarCollapsed',
   mcpEnabled: 'mcpEnabled',
   mcpPort: 'mcpPort',
+  mcpAllowWrite: 'mcpAllowWrite',
 } as const;
 
 const DEFAULTS = {
@@ -31,6 +32,7 @@ const DEFAULTS = {
   sidebarCollapsed: false,
   mcpEnabled: false,
   mcpPort: 23119,
+  mcpAllowWrite: false,
 } as const;
 
 function getRaw(key: string): unknown {
@@ -146,5 +148,11 @@ export const Prefs = {
   },
   setMcpPort(value: number): void {
     setRaw(PREF_KEYS.mcpPort, value);
+  },
+  getMcpAllowWrite(): boolean {
+    return getBoolean(PREF_KEYS.mcpAllowWrite, DEFAULTS.mcpAllowWrite);
+  },
+  setMcpAllowWrite(value: boolean): void {
+    setRaw(PREF_KEYS.mcpAllowWrite, value);
   },
 };

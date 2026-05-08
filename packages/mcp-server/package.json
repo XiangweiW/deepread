@@ -1,6 +1,6 @@
 {
   "name": "deepread-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP server bridge for DeepRead Zotero plugin. Lets Claude Code / Cursor / Codex CLI / etc. read your Zotero library.",
   "type": "module",
   "bin": {

@@ -1,6 +1,6 @@
 {
   "name": "@deepread/shared",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Shared TypeScript modules for DeepRead (LLM, RAG, prompts, context types).",
   "private": true,
   "type": "module",

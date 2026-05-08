@@ -101,15 +101,29 @@ The same JSON shape works in Continue, Windsurf, Cline, Zed, and most other MCP-
 
 ## Available tools
 
+### Read tools (always on)
+
 | Tool | Description | Key inputs |
 |---|---|---|
 | `search_library` | Full-text + metadata search across the whole Zotero library. | `query`, optional `limit` |
 | `get_item` | Fetch a single item's metadata (title, authors, year, abstract, tags, collections). | `itemKey` |
 | `get_item_fulltext` | Full extracted text of a PDF item. | `itemKey` |
 | `list_collections` | List all collections (id, name, parent, item count). | — |
-| `search_collection` | Search within one collection. | `collectionKey`, `query`, optional `limit` |
-| `rag_query` | Retrieval-augmented answer over an entire collection using DeepRead's local embedding index. | `collectionKey`, `query`, optional `topK` |
+| `search_collection` | Search within one collection. | `collectionID`, `query`, optional `limit` |
+| `rag_query` | Retrieval-augmented answer over an entire collection using DeepRead's local embedding index. | `collectionID`, `query`, optional `topK` |
 | `get_annotations` | All highlights and notes the user has made on an item. | `itemKey` |
+
+### Write tools (require Settings → DeepRead → "Allow write operations")
+
+Off by default. When enabled, every write is auto-tagged `deepread:mcp` so you can audit / filter / undo. The audit tag itself **cannot be removed via MCP** — that prevents a hostile prompt from erasing its own trail.
+
+| Tool | Description | Key inputs |
+|---|---|---|
+| `add_note` | Create a child note on an item with markdown content. | `itemKey`, `content`, optional `title`, `tags` |
+| `add_tag` | Add tags to an item. | `itemKey`, `tags[]` |
+| `remove_tag` | Remove tags from an item (refuses to remove `deepread:mcp`). | `itemKey`, `tags[]` |
+| `add_to_collection` | Move an existing library item into a collection. | `itemKey`, `collectionID` |
+| `add_annotation` | Add a sticky-note annotation (free-form comment, no highlight position) to the first PDF attachment of an item. | `itemKey`, `comment`, optional `pageLabel`, `color` |
 
 Example session (Claude Code):
 
@@ -122,7 +136,7 @@ Example session (Claude Code):
 ## Privacy
 
 - The MCP host listens **only on `127.0.0.1:23119`** — the same loopback port Zotero already uses for its connector. No external traffic, no LAN exposure.
-- Tools are **read-only**. They do not modify your Zotero database. Annotation write-back is on the roadmap; it is intentionally not in this version.
+- Read tools and write tools are gated separately. **Write is off by default**; even after you enable the MCP server, the AI cannot modify your library until you also tick "Allow write operations". Every write is tagged `deepread:mcp` so you can find and undo all model-made changes via Zotero's tag selector.
 - The MCP **client** (Claude Code, Cursor, etc.) sends your queries plus any retrieved text to **its own LLM provider**. That provider sees what you ask about and the snippets the tools return. DeepRead itself does not phone home.
 - If a collection is sensitive, simply do not run `rag_query` against it. `search_library` returns metadata only by default; `get_item_fulltext` is the one to think about.
 
@@ -136,7 +150,8 @@ Example session (Claude Code):
 
 ## Roadmap
 
-- Bidirectional annotation write-back (`add_highlight`, `add_note`).
+- ✅ Notes, tags, sticky-note annotations, add-to-collection — shipped in v0.2.
+- Highlight annotations with PDF coordinates (will require coordinate inference from text — not trivial).
 - Reading-queue tools (`get_unread`, `mark_read`).
 - arXiv / Semantic Scholar wrappers so the agent can pull a paper into your library, not just read what's already there.
-- Per-tool allowlist in the plugin settings (today: server is on or off; tomorrow: enable `search_*` but not `get_item_fulltext`).
+- Per-tool allowlist in the plugin settings (today: read on/off, write on/off; tomorrow: enable `add_note` but not `add_tag`).

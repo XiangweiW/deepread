@@ -1,6 +1,6 @@
 {
   "name": "deepread",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "DeepRead \u2014 AI reading assistant for Zotero. Chat with your papers and collections.",
   "private": true,
   "type": "module",
