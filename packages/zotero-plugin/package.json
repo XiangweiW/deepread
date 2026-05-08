@@ -1,6 +1,6 @@
 {
   "name": "@deepread/zotero-plugin",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "description": "DeepRead Zotero 7 plugin (bootstrapped extension).",
   "private": true,
   "type": "module",
