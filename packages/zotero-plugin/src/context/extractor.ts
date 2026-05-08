@@ -132,6 +132,13 @@ async function getPdfAttachments(item: any): Promise<any[]> {
   return out;
 }
 
+async function unwrapMaybePromise(value: any): Promise<any> {
+  if (value && typeof value.then === 'function') {
+    try { return await value; } catch { return undefined; }
+  }
+  return value;
+}
+
 export async function extractFullText(item: any): Promise<string | undefined> {
   try {
     const atts = await getPdfAttachments(item);
@@ -139,18 +146,20 @@ export async function extractFullText(item: any): Promise<string | undefined> {
       try {
         const attID = Number(att?.id ?? att?.itemID ?? 0);
         if (Zotero?.Fulltext?.getItemContent && attID) {
-          const text = await Zotero.Fulltext.getItemContent(attID);
-          if (text && String(text).trim().length > 0) {
-            return String(text);
+          let text = Zotero.Fulltext.getItemContent(attID);
+          text = await unwrapMaybePromise(text);
+          if (text != null && typeof text === 'string' && text.trim().length > 0) {
+            return text;
           }
         }
       } catch (err) {
         debug('Fulltext.getItemContent failed', err);
       }
       try {
-        const cached = att?.attachmentText;
-        if (cached && String(cached).trim().length > 0) {
-          return String(cached);
+        let cached = att?.attachmentText;
+        cached = await unwrapMaybePromise(cached);
+        if (cached != null && typeof cached === 'string' && cached.trim().length > 0) {
+          return cached;
         }
       } catch (err) {
         debug('attachmentText failed', err);

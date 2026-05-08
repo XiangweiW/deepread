@@ -1,4 +1,4 @@
-import { buildItemPrimer, openInCursor, type ItemPrimerInput } from './cursorBridge';
+import { buildItemPrimer, openInCursor, openItemInCursorWithPdf, type ItemPrimerInput } from './cursorBridge';
 
 const MENUITEM_ID = 'zotero-copilot-ask-item-in-cursor';
 const POLL_INTERVAL_MS = 1000;
@@ -107,10 +107,18 @@ function ensureMenuItem(win: any): boolean {
           return;
         }
         const primer = buildItemPrimer(inputs);
-        const result = openInCursor(primer);
-        if (result.reason) {
-          try { (Zotero.getMainWindow?.() as any)?.alert(result.reason); } catch {}
-        }
+        // For single-item: open the PDF in Cursor's editor too. Multi-select: just open chat.
+        const promise: Promise<{ ok: boolean; reason?: string }> =
+          items.length === 1
+            ? openItemInCursorWithPdf(items[0], primer)
+            : Promise.resolve(openInCursor(primer));
+        promise
+          .then((result) => {
+            if (result?.reason) {
+              try { (Zotero.getMainWindow?.() as any)?.alert(result.reason); } catch {}
+            }
+          })
+          .catch((err: any) => debug('openItemInCursorWithPdf threw', err));
       } catch (err) {
         debug('command handler failed', err);
       }

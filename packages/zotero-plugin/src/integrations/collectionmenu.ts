@@ -1,5 +1,5 @@
 import { openCollectionChat } from './collectionchat';
-import { buildCollectionPrimer, openInCursor } from './cursorBridge';
+import { buildCollectionPrimer, openCollectionInCursorWithIndex } from './cursorBridge';
 
 const MENUITEM_ID = 'zotero-copilot-analyze-collection';
 const CURSOR_MENUITEM_ID = 'zotero-copilot-ask-collection-in-cursor';
@@ -127,12 +127,14 @@ function ensureMenuItem(win: any, rootURI: string): boolean {
             }
           } catch {}
           const primer = buildCollectionPrimer({ collectionID: id, name, itemCount: count });
-          const result = openInCursor(primer);
-          if (!result.ok && result.reason) {
-            try { (Zotero.getMainWindow?.() as any)?.alert(result.reason); } catch {}
-          } else if (result.ok && result.reason) {
-            try { (Zotero.getMainWindow?.() as any)?.alert(result.reason); } catch {}
-          }
+          const collection: any = (Zotero as any).Collections?.get?.(id);
+          openCollectionInCursorWithIndex(collection, primer)
+            .then((result) => {
+              if (result?.reason) {
+                try { (Zotero.getMainWindow?.() as any)?.alert(result.reason); } catch {}
+              }
+            })
+            .catch((err: any) => debug('openCollectionInCursorWithIndex threw', err));
         } catch (err) {
           debug('cursor handler failed', err);
         }

@@ -51,23 +51,116 @@ function isCursorInstalled(): boolean {
   }
 }
 
-function activateCursorAndPaste(): boolean {
-  // AppleScript: activate Cursor → wait → Cmd+L (open chat) → wait → Cmd+V (paste).
-  // We do NOT press Return — the user types their actual question first.
-  const script = [
+function activateCursorAndPaste(extraDelayMs: number = 0, autoSubmit: boolean = true): boolean {
+  // AppleScript: activate Cursor → Cmd+L (open chat) → wait for MCP to come up → Cmd+V (paste) → optional Return.
+  // The Cmd+L → Cmd+V gap must be long enough that Cursor's MCP servers (spawned lazily when chat opens) finish handshake — 1.8s is empirically enough on a warm machine; 0.4s is not.
+  const initialDelay = (0.8 + extraDelayMs / 1000).toFixed(2);
+  const lines: string[] = [
     'tell application "Cursor" to activate',
-    'delay 0.6',
+    `delay ${initialDelay}`,
     'tell application "System Events"',
     '  keystroke "l" using command down',
-    '  delay 0.4',
+    '  delay 1.8',
     '  keystroke "v" using command down',
-    'end tell',
-  ].join('\n');
-  return runProcess('/usr/bin/osascript', ['-e', script]);
+  ];
+  if (autoSubmit) {
+    lines.push('  delay 0.6');
+    lines.push('  key code 36'); // Return
+  }
+  lines.push('end tell');
+  return runProcess('/usr/bin/osascript', ['-e', lines.join('\n')]);
 }
 
 function openCursorOnly(): boolean {
   return runProcess('/usr/bin/open', ['-a', 'Cursor']);
+}
+
+function openFileInCursor(path: string): boolean {
+  return runProcess('/usr/bin/open', ['-a', 'Cursor', path]);
+}
+
+function getItemPdfPath(item: any): string | null {
+  try {
+    const attIDs: number[] = item?.getAttachments?.() ?? [];
+    const Z: any = (globalThis as any).Zotero;
+    for (const aid of attIDs) {
+      try {
+        const att = Z?.Items?.get?.(aid);
+        if (att?.attachmentContentType === 'application/pdf') {
+          const p = att.getFilePath?.();
+          if (typeof p === 'string' && p.length > 0) return p;
+        }
+      } catch {}
+    }
+  } catch {}
+  return null;
+}
+
+async function writeTempFile(filename: string, content: string): Promise<string | null> {
+  try {
+    const Z: any = (globalThis as any).Zotero;
+    const path = '/tmp/' + filename;
+    if (Z?.File?.putContentsAsync) {
+      await Z.File.putContentsAsync(path, content);
+      return path;
+    }
+  } catch (err) {
+    debug('writeTempFile failed: ' + err, 1);
+  }
+  return null;
+}
+
+function escapeMdLinkText(s: string): string {
+  return String(s ?? '(untitled)').replace(/[\[\]]/g, (c) => '\\' + c);
+}
+
+function buildCollectionMarkdown(collection: any): string {
+  let name = '(unnamed)';
+  let id: number | undefined;
+  let items: any[] = [];
+  try { name = String(collection?.name ?? '(unnamed)'); } catch {}
+  try { id = Number(collection?.id); } catch {}
+  try { items = collection?.getChildItems?.(false, false) ?? []; } catch {}
+
+  const filtered = items.filter((it: any) => {
+    try { return !it?.isNote?.() && !it?.isAttachment?.(); } catch { return false; }
+  });
+
+  const lines: string[] = [];
+  lines.push(`# ${escapeMdLinkText(name)}`);
+  lines.push('');
+  lines.push(`${filtered.length} items — collectionID \`${id ?? '?'}\``);
+  lines.push('');
+  lines.push('Click a title to open the PDF in Cursor. Open chat (Cmd+L) and ask DeepRead anything across the whole collection — `rag_query`, `search_collection`, `get_item_fulltext` are all wired.');
+  lines.push('');
+  lines.push('---');
+  lines.push('');
+
+  for (const it of filtered) {
+    try {
+      const title = String(it.getField?.('title') ?? '(untitled)');
+      const dateRaw = String(it.getField?.('date') ?? '');
+      const year = dateRaw.match(/\d{4}/)?.[0] ?? '';
+      const creators: any[] = it.getCreators?.() ?? [];
+      const firstAuthor: string = creators[0]?.lastName ?? creators[0]?.name ?? '';
+      const moreAuthors = creators.length > 1 ? ' et al.' : '';
+      const itemKey = String(it.key ?? '');
+      const pdfPath = getItemPdfPath(it);
+      const headline = pdfPath
+        ? `[${escapeMdLinkText(title)}](file://${encodeURI(pdfPath)})`
+        : `**${escapeMdLinkText(title)}** _(no PDF attached)_`;
+      const meta = [firstAuthor + moreAuthors, year].filter(Boolean).join(' · ');
+      const metaSuffix = meta ? ` — ${meta}` : '';
+      lines.push(`- ${headline}${metaSuffix} \`${itemKey}\``);
+    } catch {
+    }
+  }
+
+  if (filtered.length === 0) {
+    lines.push('_No regular items in this collection._');
+  }
+
+  return lines.join('\n');
 }
 
 function escapeForPrompt(s: string): string {
@@ -90,27 +183,32 @@ export type CollectionPrimerInput = {
 export function buildItemPrimer(items: ItemPrimerInput[]): string {
   if (items.length === 1) {
     const it = items[0];
-    const lines: string[] = [];
-    lines.push("I'm reading this paper in Zotero. Use the deepread MCP tools to load it:");
-    lines.push('- `deepread.get_item` itemKey=' + it.itemKey + ' for metadata');
-    lines.push('- `deepread.get_item_fulltext` itemKey=' + it.itemKey + ' for full PDF text');
-    lines.push('- `deepread.get_annotations` itemKey=' + it.itemKey + " for my highlights & notes");
-    lines.push('');
-    if (it.title) lines.push('Paper: ' + escapeForPrompt(it.title));
-    if (it.authors && it.authors.length > 0) lines.push('Authors: ' + it.authors.slice(0, 6).map(escapeForPrompt).join(', ') + (it.authors.length > 6 ? ', et al.' : ''));
-    if (it.year) lines.push('Year: ' + it.year);
-    lines.push('Item key: ' + it.itemKey);
-    lines.push('');
-    lines.push('Help me with: ');
-    return lines.join('\n');
+    const meta: string[] = [];
+    if (it.title) meta.push('Title: ' + escapeForPrompt(it.title));
+    if (it.authors && it.authors.length > 0) meta.push('Authors: ' + it.authors.slice(0, 6).map(escapeForPrompt).join(', ') + (it.authors.length > 6 ? ', et al.' : ''));
+    if (it.year) meta.push('Year: ' + it.year);
+    meta.push('Item key: ' + it.itemKey);
+
+    return [
+      "I'm opening this Zotero paper. Use the DeepRead MCP tools (the deepread server is connected — if you don't see the tools, list your available MCP tools first):",
+      '',
+      meta.join('\n'),
+      '',
+      'Steps:',
+      `1. Call the get_item tool with itemKey "${it.itemKey}" for metadata.`,
+      `2. Call get_item_fulltext with itemKey "${it.itemKey}" for the full PDF text.`,
+      `3. Call get_annotations with itemKey "${it.itemKey}" to see my existing highlights.`,
+      '4. Then write a tight first read: problem, approach, key contributions, methods, main findings, limitations.',
+      '5. Then wait for my follow-up questions.',
+      '',
+      'Do NOT fall back to public sources or to reading sqlite directly — the local MCP tools are the source of truth and respect my privacy settings.',
+    ].join('\n');
   }
-  const lines: string[] = [];
-  lines.push("I'm reading these papers in Zotero. Use deepread MCP tools to load any of them:");
-  lines.push('- `deepread.get_item` itemKey=<key> for metadata');
-  lines.push('- `deepread.get_item_fulltext` itemKey=<key> for full PDF text');
-  lines.push('- `deepread.get_annotations` itemKey=<key> for my highlights & notes');
-  lines.push('');
-  lines.push('Selected items:');
+  const lines: string[] = [
+    "I'm opening multiple Zotero papers in Cursor.",
+    '',
+    'Selected items:',
+  ];
   for (const it of items) {
     const t = it.title ? escapeForPrompt(it.title) : '(untitled)';
     const a = it.authors && it.authors.length > 0 ? ' — ' + escapeForPrompt(it.authors[0]) + (it.authors.length > 1 ? ' et al.' : '') : '';
@@ -118,23 +216,28 @@ export function buildItemPrimer(items: ItemPrimerInput[]): string {
     lines.push('- ' + t + a + y + ' [key=' + it.itemKey + ']');
   }
   lines.push('');
-  lines.push('Help me with: ');
+  lines.push('Use the DeepRead MCP tools (server name: deepread). For each paper, call get_item and get_item_fulltext with the itemKey above. Then write a brief comparative read: each paper\'s core claim, then where they agree or disagree. Wait for my follow-ups. Do NOT fall back to public sources.');
   return lines.join('\n');
 }
 
 export function buildCollectionPrimer(coll: CollectionPrimerInput): string {
-  const lines: string[] = [];
-  lines.push("I'm focused on this Zotero collection. Use deepread MCP for any cross-paper question:");
-  lines.push('- `deepread.list_collections` to confirm context');
-  lines.push('- `deepread.search_collection` collectionID=' + coll.collectionID + ' query=... to find specific papers');
-  lines.push('- `deepread.rag_query` collectionID=' + coll.collectionID + ' query=... for retrieval-augmented answers across the whole collection');
-  lines.push('- `deepread.get_item` / `get_item_fulltext` / `get_annotations` for individual papers in the collection');
-  lines.push('');
-  lines.push('Collection: ' + escapeForPrompt(coll.name));
-  lines.push('Collection ID: ' + coll.collectionID);
+  const lines: string[] = [
+    "I'm opening this Zotero collection in Cursor.",
+    '',
+    'Collection: ' + escapeForPrompt(coll.name),
+    'Collection ID: ' + coll.collectionID,
+  ];
   if (typeof coll.itemCount === 'number') lines.push('Item count: ' + coll.itemCount);
   lines.push('');
-  lines.push('Help me with: ');
+  lines.push('Use the DeepRead MCP tools (server name: deepread). If you don\'t see them, list your available MCP tools first.');
+  lines.push('');
+  lines.push('Steps:');
+  lines.push(`1. Call the rag_query tool with collectionID ${coll.collectionID} and query "dominant themes and main contributions across this collection", topK 10.`);
+  lines.push(`2. From the retrieved excerpts, give me: 3-5 dominant themes, the most cited / pivotal papers, and any obvious disagreements or gaps.`);
+  lines.push(`3. If something needs more depth, follow up with search_collection or get_item_fulltext on specific items.`);
+  lines.push('4. Then wait for my follow-up questions.');
+  lines.push('');
+  lines.push('Do NOT fall back to public sources — the local MCP index has my actual papers.');
   return lines.join('\n');
 }
 
@@ -154,6 +257,55 @@ export function openInCursor(prompt: string): { ok: boolean; reason?: string } {
   if (!launched) {
     openCursorOnly();
     return { ok: true, reason: 'Cursor opened, but auto-paste failed. The prompt is on your clipboard — open chat (Cmd+L) and paste (Cmd+V) manually. macOS may prompt you for Accessibility permission for Zotero the first time — once granted, future clicks paste automatically.' };
+  }
+  return { ok: true };
+}
+
+export async function openItemInCursorWithPdf(item: any, prompt: string): Promise<{ ok: boolean; reason?: string }> {
+  debug('openItemInCursorWithPdf for item ' + (item?.key ?? '?'));
+  if (!isCursorInstalled()) {
+    return { ok: false, reason: 'Cursor.app not found at /Applications/Cursor.app.' };
+  }
+  if (!copyToClipboard(prompt)) {
+    return { ok: false, reason: 'Failed to copy prompt to clipboard.' };
+  }
+  const pdfPath = getItemPdfPath(item);
+  let extraDelay = 400;
+  if (pdfPath) {
+    debug('opening pdf in cursor: ' + pdfPath);
+    openFileInCursor(pdfPath);
+    extraDelay = 1000;
+  } else {
+    debug('no PDF path for item; just opening Cursor');
+    openCursorOnly();
+  }
+  if (!activateCursorAndPaste(extraDelay)) {
+    return { ok: true, reason: 'PDF opened but auto-paste failed. Cmd+L → Cmd+V manually. (Grant Zotero macOS Accessibility permission to skip this next time.)' };
+  }
+  return { ok: pdfPath ? true : true, reason: pdfPath ? undefined : 'No PDF attached to this item — only the chat was opened.' };
+}
+
+export async function openCollectionInCursorWithIndex(collection: any, prompt: string): Promise<{ ok: boolean; reason?: string }> {
+  debug('openCollectionInCursorWithIndex for collection ' + (collection?.id ?? '?'));
+  if (!isCursorInstalled()) {
+    return { ok: false, reason: 'Cursor.app not found at /Applications/Cursor.app.' };
+  }
+  if (!copyToClipboard(prompt)) {
+    return { ok: false, reason: 'Failed to copy prompt to clipboard.' };
+  }
+  const md = buildCollectionMarkdown(collection);
+  const filename = `deepread-collection-${collection?.id ?? 'unknown'}.md`;
+  const path = await writeTempFile(filename, md);
+  let extraDelay = 400;
+  if (path) {
+    debug('opening collection index in cursor: ' + path);
+    openFileInCursor(path);
+    extraDelay = 1000;
+  } else {
+    openCursorOnly();
+  }
+  if (!activateCursorAndPaste(extraDelay)) {
+    return { ok: true, reason: 'Index opened but auto-paste failed. Cmd+L → Cmd+V manually.' };
   }
   return { ok: true };
 }
