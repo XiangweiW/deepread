@@ -51,21 +51,38 @@ function isCursorInstalled(): boolean {
   }
 }
 
-function activateCursorAndPaste(extraDelayMs: number = 0, autoSubmit: boolean = true): boolean {
-  // AppleScript: activate Cursor → Cmd+L (open chat) → wait for MCP to come up → Cmd+V (paste) → optional Return.
-  // The Cmd+L → Cmd+V gap must be long enough that Cursor's MCP servers (spawned lazily when chat opens) finish handshake — 1.8s is empirically enough on a warm machine; 0.4s is not.
-  const initialDelay = (0.8 + extraDelayMs / 1000).toFixed(2);
+function appleScriptStringLiteral(s: string): string {
+  return '"' + String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+}
+
+function activateCursorOpenFileAndPaste(filePath: string | null, autoSubmit: boolean = true): boolean {
+  // One unified AppleScript: detect cold/warm Cursor, wait appropriately so PDF plugin
+  // has time to initialize before we open the file, then Cmd+L → wait for MCP handshake → Cmd+V → optional Return.
+  // Splitting this into multiple shell calls races: cold start drops the PDF into the default text editor (raw bytes) and loses Cmd+L keystrokes.
   const lines: string[] = [
-    'tell application "Cursor" to activate',
-    `delay ${initialDelay}`,
     'tell application "System Events"',
-    '  keystroke "l" using command down',
-    '  delay 1.8',
-    '  keystroke "v" using command down',
+    '  set isRunning to (exists (processes where name is "Cursor"))',
+    'end tell',
+    'tell application "Cursor" to activate',
+    'if isRunning then',
+    '  delay 0.8',
+    'else',
+    '  delay 3.5',
+    'end if',
   ];
+  if (filePath) {
+    lines.push(`do shell script "open -a Cursor " & quoted form of ${appleScriptStringLiteral(filePath)}`);
+    lines.push('delay 1.2');
+    lines.push('tell application "Cursor" to activate');
+    lines.push('delay 0.3');
+  }
+  lines.push('tell application "System Events"');
+  lines.push('  keystroke "l" using command down');
+  lines.push('  delay 1.8');
+  lines.push('  keystroke "v" using command down');
   if (autoSubmit) {
     lines.push('  delay 0.6');
-    lines.push('  key code 36'); // Return
+    lines.push('  key code 36');
   }
   lines.push('end tell');
   return runProcess('/usr/bin/osascript', ['-e', lines.join('\n')]);
@@ -73,10 +90,6 @@ function activateCursorAndPaste(extraDelayMs: number = 0, autoSubmit: boolean = 
 
 function openCursorOnly(): boolean {
   return runProcess('/usr/bin/open', ['-a', 'Cursor']);
-}
-
-function openFileInCursor(path: string): boolean {
-  return runProcess('/usr/bin/open', ['-a', 'Cursor', path]);
 }
 
 function getItemPdfPath(item: any): string | null {
@@ -252,7 +265,7 @@ export function openInCursor(prompt: string): { ok: boolean; reason?: string } {
   if (!copied) {
     return { ok: false, reason: 'Failed to copy prompt to clipboard.' };
   }
-  const launched = activateCursorAndPaste();
+  const launched = activateCursorOpenFileAndPaste(null);
   debug('osascript launched=' + launched);
   if (!launched) {
     openCursorOnly();
@@ -270,19 +283,15 @@ export async function openItemInCursorWithPdf(item: any, prompt: string): Promis
     return { ok: false, reason: 'Failed to copy prompt to clipboard.' };
   }
   const pdfPath = getItemPdfPath(item);
-  let extraDelay = 400;
   if (pdfPath) {
     debug('opening pdf in cursor: ' + pdfPath);
-    openFileInCursor(pdfPath);
-    extraDelay = 1000;
   } else {
     debug('no PDF path for item; just opening Cursor');
-    openCursorOnly();
   }
-  if (!activateCursorAndPaste(extraDelay)) {
-    return { ok: true, reason: 'PDF opened but auto-paste failed. Cmd+L → Cmd+V manually. (Grant Zotero macOS Accessibility permission to skip this next time.)' };
+  if (!activateCursorOpenFileAndPaste(pdfPath)) {
+    return { ok: true, reason: 'Auto-paste failed. Cmd+L → Cmd+V manually. (Grant Zotero macOS Accessibility permission to skip this next time.)' };
   }
-  return { ok: pdfPath ? true : true, reason: pdfPath ? undefined : 'No PDF attached to this item — only the chat was opened.' };
+  return { ok: true, reason: pdfPath ? undefined : 'No PDF attached to this item — only the chat was opened.' };
 }
 
 export async function openCollectionInCursorWithIndex(collection: any, prompt: string): Promise<{ ok: boolean; reason?: string }> {
@@ -296,16 +305,11 @@ export async function openCollectionInCursorWithIndex(collection: any, prompt: s
   const md = buildCollectionMarkdown(collection);
   const filename = `deepread-collection-${collection?.id ?? 'unknown'}.md`;
   const path = await writeTempFile(filename, md);
-  let extraDelay = 400;
   if (path) {
     debug('opening collection index in cursor: ' + path);
-    openFileInCursor(path);
-    extraDelay = 1000;
-  } else {
-    openCursorOnly();
   }
-  if (!activateCursorAndPaste(extraDelay)) {
-    return { ok: true, reason: 'Index opened but auto-paste failed. Cmd+L → Cmd+V manually.' };
+  if (!activateCursorOpenFileAndPaste(path)) {
+    return { ok: true, reason: 'Auto-paste failed. Cmd+L → Cmd+V manually.' };
   }
   return { ok: true };
 }

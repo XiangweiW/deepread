@@ -139,6 +139,13 @@ async function unwrapMaybePromise(value: any): Promise<any> {
   return value;
 }
 
+function looksLikeRawPdf(s: string): boolean {
+  if (!s) return false;
+  const head = s.slice(0, 1024);
+  if (head.startsWith('%PDF-')) return true;
+  return /\bendobj\b/.test(head) && /\bendstream\b/.test(head);
+}
+
 export async function extractFullText(item: any): Promise<string | undefined> {
   try {
     const atts = await getPdfAttachments(item);
@@ -149,7 +156,11 @@ export async function extractFullText(item: any): Promise<string | undefined> {
           let text = Zotero.Fulltext.getItemContent(attID);
           text = await unwrapMaybePromise(text);
           if (text != null && typeof text === 'string' && text.trim().length > 0) {
-            return text;
+            if (looksLikeRawPdf(text)) {
+              debug('Fulltext.getItemContent returned raw PDF bytes; skipping');
+            } else {
+              return text;
+            }
           }
         }
       } catch (err) {
@@ -159,7 +170,11 @@ export async function extractFullText(item: any): Promise<string | undefined> {
         let cached = att?.attachmentText;
         cached = await unwrapMaybePromise(cached);
         if (cached != null && typeof cached === 'string' && cached.trim().length > 0) {
-          return cached;
+          if (looksLikeRawPdf(cached)) {
+            debug('attachmentText returned raw PDF bytes; skipping');
+          } else {
+            return cached;
+          }
         }
       } catch (err) {
         debug('attachmentText failed', err);
